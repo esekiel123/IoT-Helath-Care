@@ -4,6 +4,8 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <DHT.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
 
 // Configuración para el sensor MAX30105
 MAX30105 particleSensor;
@@ -27,6 +29,12 @@ DHT dht(DHT_PIN, DHT11);
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
+// Configuración de red Wi-Fi y ThingSpeak
+const char* ssid = "TuSSID";       // Cambia esto a tu SSID de Wi-Fi
+const char* password = "TuClave";  // Cambia esto a tu contraseña de Wi-Fi
+const char* server = "api.thingspeak.com";
+const String apiKey = "TuAPIKey";  // Cambia esto a tu clave API de ThingSpeak
+
 void setup()
 {
   Serial.begin(115200);
@@ -46,6 +54,14 @@ void setup()
 
   // Inicializar el sensor DS18B20
   sensors.begin();
+
+  // Inicializar la conexión Wi-Fi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+  }
+  Serial.println("Connected to WiFi");
 }
 
 void loop()
@@ -95,7 +111,27 @@ void loop()
   Serial.print(ds18b20Temperature);
   Serial.println(F(" °C"));
 
-  // Aquí puedes agregar la lógica para enviar los datos a través de Wi-Fi o Bluetooth, si es necesario.
+  // Envío de datos a ThingSpeak
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    String data = "api_key=" + apiKey + "&field1=" + String(heartRate) + "&field2=" + String(spo2) + "&field3=" + String(temperature) + "&field4=" + String(humidity) + "&field5=" + String(ds18b20Temperature);
+    String url = "http://" + String(server) + "/update";
+
+    http.begin(url);
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+    int httpResponseCode = http.POST(data);
+
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.println("HTTP Response code: " + String(httpResponseCode));
+      Serial.println(response);
+    } else {
+      Serial.println("Error in HTTP request");
+    }
+
+    http.end();
+  }
 
   delay(1000);
 }
